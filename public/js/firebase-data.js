@@ -40,18 +40,35 @@ class StudentPanel {
         }
     }
     
-    async waitForFirebaseService(maxAttempts = 10, delay = 500) {
+    async waitForFirebaseService(maxAttempts = 3, delay = 100) {
+        // Verificar inmediatamente primero (sin esperar)
+        if (window.firebaseDataService?.isReady) {
+            console.log('[Firebase] ✓ Servicio de Firebase disponible inmediatamente');
+            this.firebase.service = window.firebaseDataService;
+            return;
+        }
+        
+        // Si no está disponible, esperar con menos intentos y delay más corto
         for (let i = 0; i < maxAttempts; i++) {
             if (window.firebaseDataService?.isReady) {
-                console.log('[Firebase] ✓ Servicio de Firebase disponible');
+                console.log(`[Firebase] ✓ Servicio de Firebase disponible (intento ${i + 1})`);
                 this.firebase.service = window.firebaseDataService;
                 return;
             }
-            console.log(`[Firebase] Esperando servicio de Firebase... (intento ${i + 1}/${maxAttempts})`);
+            if (i < maxAttempts - 1) { // No log en el último intento
+                console.log(`[Firebase] Esperando servicio... (${i + 1}/${maxAttempts})`);
+            }
             await new Promise(resolve => setTimeout(resolve, delay));
         }
-        console.warn('[Firebase] ⚠️ El servicio de Firebase no está disponible después de esperar');
-        this.firebase.service = window.firebaseDataService || null;
+        
+        // Última verificación
+        if (window.firebaseDataService) {
+            console.warn('[Firebase] ⚠️ Servicio disponible pero isReady=false. Usando de todas formas.');
+            this.firebase.service = window.firebaseDataService;
+        } else {
+            console.error('[Firebase] ❌ El servicio de Firebase no está disponible');
+            this.firebase.service = null;
+        }
     }
     
     startAutoRefresh() {
@@ -258,11 +275,23 @@ class StudentPanel {
         
         console.log('[Firebase] Iniciando integración...');
         console.log('[Firebase] Service ready?', service?.isReady);
+        console.log('[Firebase] Service exists?', !!service);
         console.log('[Firebase] User email:', this.userData?.email);
         
-        if (!service?.isReady) {
-            console.warn('[Firebase] Service no está listo');
+        // Si el servicio existe pero isReady es false, intentar usarlo de todas formas
+        if (!service) {
+            console.warn('[Firebase] Service no existe');
             return;
+        }
+        
+        if (!service.isReady && !service.database) {
+            console.warn('[Firebase] Service no está listo y no tiene database');
+            return;
+        }
+        
+        // Si tiene database, podemos usarlo aunque isReady sea false
+        if (!service.isReady) {
+            console.warn('[Firebase] Service isReady=false pero tiene database, continuando...');
         }
         
         if (!this.userData?.email) {

@@ -13,12 +13,14 @@ const firebaseConfig = window.__FIREBASE_CONFIG__;
 let app = null;
 let database = null;
 
+// Inicializar Firebase inmediatamente
 if (!firebaseConfig) {
   console.warn('[Firebase] No se encontró window.__FIREBASE_CONFIG__. Configura las credenciales de Firebase antes de cargar firebase-data.js');
 } else {
   try {
     app = initializeApp(firebaseConfig);
     database = getDatabase(app);
+    console.log('[Firebase] ✓ Firebase inicializado correctamente');
   } catch (error) {
     console.error('[Firebase] Error inicializando Firebase:', error);
   }
@@ -195,8 +197,9 @@ const getStudentsByProfessorUid = async (professorUid) => {
     .map(([uid, user]) => ({ uid, ...user }));
 };
 
+// Crear el servicio de Firebase inmediatamente y marcarlo como listo
 window.firebaseDataService = {
-  isReady: Boolean(database),
+  isReady: Boolean(database && app),
   app,
   database,
   findUserByEmail,
@@ -209,6 +212,13 @@ window.firebaseDataService = {
   getChildrenByParentUid,
   getStudentsByProfessorUid
 };
+
+// Log para debugging
+if (window.firebaseDataService.isReady) {
+  console.log('[Firebase] ✓ firebaseDataService está listo y disponible');
+} else {
+  console.warn('[Firebase] ⚠️ firebaseDataService NO está listo (database o app no inicializados)');
+}
 
 // Función global para logout
 function logout() {

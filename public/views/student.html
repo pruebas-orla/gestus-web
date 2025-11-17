@@ -295,7 +295,35 @@
     <!-- Cargar student.js primero para inicializar firebaseDataService -->
     <script type="module" src="/js/student.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Cargar firebase-data.js después de que student.js haya inicializado el servicio -->
-    <script type="module" src="/js/firebase-data.js"></script>
+    <!-- Esperar a que student.js termine de cargar antes de cargar firebase-data.js -->
+    <script>
+        // Esperar a que firebaseDataService esté disponible antes de cargar firebase-data.js
+        (async function() {
+            let attempts = 0;
+            const maxAttempts = 5;
+            
+            while (attempts < maxAttempts) {
+                if (window.firebaseDataService && window.firebaseDataService.isReady) {
+                    console.log('[Firebase] ✓ firebaseDataService listo, cargando firebase-data.js');
+                    const script = document.createElement('script');
+                    script.type = 'module';
+                    script.src = '/js/firebase-data.js';
+                    document.body.appendChild(script);
+                    return;
+                }
+                attempts++;
+                if (attempts < maxAttempts) {
+                    await new Promise(resolve => setTimeout(resolve, 50));
+                }
+            }
+            
+            // Si no está listo después de esperar, cargar de todas formas
+            console.warn('[Firebase] ⚠️ firebaseDataService no está listo, cargando firebase-data.js de todas formas');
+            const script = document.createElement('script');
+            script.type = 'module';
+            script.src = '/js/firebase-data.js';
+            document.body.appendChild(script);
+        })();
+    </script>
 </body>
 </html>
