@@ -231,9 +231,65 @@ async function getAllGestureAttempts() {
     }));
 }
 
+// Función para sincronizar todos los gesture_attempts de Firebase a MySQL
+async function syncAllGestureAttemptsFromFirebase() {
+    initializeFirebaseAdmin();
+    const GestureAttempt = require('../models/GestureAttempt');
+
+    try {
+        const snapshot = await admin.database().ref('gestureAttempts').once('value');
+        const data = snapshot.val() || {};
+
+        const results = {
+            totalUsers: Object.keys(data).length,
+            synced: 0,
+            errors: []
+        };
+
+        for (const [firebaseUid, rawAttempts] of Object.entries(data)) {
+            try {
+                const attempts = normalizeGestureAttempts(rawAttempts);
+                const syncResult = await GestureAttempt.syncFromFirebase(firebaseUid, attempts);
+                results.synced += syncResult.synced.length;
+                if (syncResult.errors.length > 0) {
+                    results.errors.push(...syncResult.errors);
+                }
+            } catch (error) {
+                console.error(`Error sincronizando attempts para ${firebaseUid}:`, error.message);
+                results.errors.push({ firebaseUid, error: error.message });
+            }
+        }
+
+        return results;
+    } catch (error) {
+        console.error('Error sincronizando gesture_attempts desde Firebase:', error);
+        throw error;
+    }
+}
+
+// Función para sincronizar gesture_attempts de un usuario específico
+async function syncGestureAttemptsForUser(firebaseUid) {
+    initializeFirebaseAdmin();
+    const GestureAttempt = require('../models/GestureAttempt');
+
+    try {
+        const snapshot = await admin.database().ref(`gestureAttempts/${firebaseUid}`).once('value');
+        const rawAttempts = snapshot.val() || {};
+        const attempts = normalizeGestureAttempts(rawAttempts);
+
+        const syncResult = await GestureAttempt.syncFromFirebase(firebaseUid, attempts);
+        return syncResult;
+    } catch (error) {
+        console.error(`Error sincronizando attempts para usuario ${firebaseUid}:`, error);
+        throw error;
+    }
+}
+
 module.exports = {
     getFirebaseUsers,
     getGestureAttemptsForUser,
-    getAllGestureAttempts
+    getAllGestureAttempts,
+    syncAllGestureAttemptsFromFirebase,
+    syncGestureAttemptsForUser
 };
 

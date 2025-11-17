@@ -1,4 +1,7 @@
 // Panel de Estudiante - JavaScript
+// Configuración de la API (usar la misma que config.js)
+const API_BASE_URL = window.API_BASE_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000/api' : '/api');
+
 class StudentPanel {
     constructor() {
         this.token = localStorage.getItem('token');
@@ -77,13 +80,23 @@ class StudentPanel {
             clearInterval(this.refreshInterval);
         }
         
-        // Actualizar cada 5 segundos
+        // Sincronizar desde Firebase cada 5 segundos y luego cargar desde MySQL
         this.refreshInterval = setInterval(async () => {
-            // Actualización silenciosa (sin mostrar loading)
-            await this.loadDashboardData(true); // true = silent
+            try {
+                // Sincronizar desde Firebase (silencioso)
+                await this.syncPracticesFromFirebase();
+                
+                // Cargar datos actualizados desde MySQL (silencioso)
+                await this.loadPractices(false); // false = no sincronizar de nuevo
+                
+                // Actualizar dashboard
+                this.updateDashboardStats();
+            } catch (error) {
+                console.error('Error en auto-refresh:', error);
+            }
         }, 5000);
         
-        console.log('✅ Auto-refresh activado (silencioso): actualizando cada 5 segundos');
+        console.log('✅ Auto-refresh activado: sincronizando desde Firebase y actualizando desde MySQL cada 5 segundos');
     }
     
     stopAutoRefresh() {
@@ -180,8 +193,8 @@ class StudentPanel {
                 this.showLoading(true);
             }
             
-            // Cargar prácticas de Firebase
-            await this.loadPractices();
+            // Cargar prácticas desde MySQL (sincronizar desde Firebase si es necesario)
+            await this.loadPractices(!silent); // Sincronizar si no es silencioso
             
             // Cargar evaluaciones del profesor
             await this.loadEvaluations();
@@ -225,41 +238,71 @@ class StudentPanel {
         }
     }
 
-    async loadPractices() {
+    async loadPractices(syncFromFirebase = false) {
         try {
-            if (this.firebase?.service?.isReady && this.firebase?.uid) {
-                // Los datos se actualizan en tiempo real mediante Firebase
-                this.renderPracticesTable();
-                this.renderRecentPractices();
-                this.updateDashboardStats();
-                this.updateProfileStats();
-                return;
-            }
-
-            // Obtener prácticas reales de la API (por ahora estará vacío hasta que se implemente)
-            const response = await fetch('/api/student/my-attempts', {
+            // Obtener prácticas desde MySQL
+            const response = await fetch(`${API_BASE_URL}/student/my-attempts`, {
                 headers: {
                     'Authorization': `Bearer ${this.token}`
                 }
             });
 
             if (!response.ok) {
-                // Si no hay prácticas aún, usar array vacío
-                this.practices = [];
-            } else {
-                const data = await response.json();
-                // Mapear datos reales de las prácticas cuando existan
+                throw new Error('Error al obtener intentos desde MySQL');
+            }
+
+            const data = await response.json();
+            
+            if (data.success && data.data.attempts) {
+                console.log(`[MySQL] ✓ Encontrados ${data.data.attempts.length} intentos en MySQL`);
+                // Mapear datos para el formato esperado
                 this.practices = data.data.attempts.map(attempt => ({
                     id: attempt.id,
-                    date: attempt.date || attempt.created_at,
-                    sign: attempt.sign || 'N/A',
-                    score: attempt.score || 0,
-                    status: this.getPerformanceStatus(attempt.score || 0)
+                    date: attempt.date || attempt.timestamp,
+                    sign: attempt.sign || attempt.gestureName || 'N/A',
+                    score: attempt.score || attempt.percentage || 0,
+                    percentage: attempt.percentage || attempt.score || 0,
+                    timestamp: attempt.timestamp,
+                    status: this.getPerformanceStatus(attempt.score || attempt.percentage || 0),
+                    raw: attempt.raw
                 }));
+            } else {
+                this.practices = [];
+            }
+
+            // Si se solicita sincronización o no hay datos, sincronizar desde Firebase
+            if (syncFromFirebase || this.practices.length === 0) {
+                await this.syncPracticesFromFirebase();
+                
+                // Después de sincronizar, volver a cargar desde MySQL
+                const refreshResponse = await fetch(`${API_BASE_URL}/student/my-attempts`, {
+                    headers: {
+                        'Authorization': `Bearer ${this.token}`
+                    }
+                });
+                
+                if (refreshResponse.ok) {
+                    const refreshData = await refreshResponse.json();
+                    if (refreshData.success && refreshData.data.attempts) {
+                        console.log(`[MySQL] ✓ Después de sincronizar: ${refreshData.data.attempts.length} intentos`);
+                        this.practices = refreshData.data.attempts.map(attempt => ({
+                            id: attempt.id,
+                            date: attempt.date || attempt.timestamp,
+                            sign: attempt.sign || attempt.gestureName || 'N/A',
+                            score: attempt.score || attempt.percentage || 0,
+                            percentage: attempt.percentage || attempt.score || 0,
+                            timestamp: attempt.timestamp,
+                            status: this.getPerformanceStatus(attempt.score || attempt.percentage || 0),
+                            raw: attempt.raw
+                        }));
+                    }
+                }
             }
             
             this.renderPracticesTable();
             this.renderRecentPractices();
+            this.updateDashboardStats();
+            this.updateProfileStats();
             
         } catch (error) {
             console.error('Error cargando prácticas:', error);
@@ -267,6 +310,30 @@ class StudentPanel {
             // Si hay error, mostrar lista vacía
             this.practices = [];
             this.renderPracticesTable();
+        }
+    }
+
+    async syncPracticesFromFirebase() {
+        try {
+            console.log('[Sync] Sincronizando gesture_attempts desde Firebase...');
+            const response = await fetch(`${API_BASE_URL}/student/sync-attempts`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Error al sincronizar desde Firebase');
+            }
+
+            const data = await response.json();
+            if (data.success) {
+                console.log(`[Sync] ✓ Sincronizados ${data.data.synced} intentos desde Firebase`);
+            }
+        } catch (error) {
+            console.error('Error sincronizando desde Firebase:', error);
         }
     }
     

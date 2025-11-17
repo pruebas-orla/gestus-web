@@ -53,6 +53,9 @@ async function initializeDatabase() {
         // Crear tabla de evaluaciones
         await createEvaluationsTable(pool);
         
+        // Crear tabla de gesture_attempts
+        await createGestureAttemptsTable(pool);
+        
         // Crear usuario administrador por defecto
         await createDefaultAdmin(pool);
         
@@ -149,6 +152,38 @@ async function createEvaluationsTable(pool) {
         console.log('Tabla evaluations creada o verificada exitosamente');
     } catch (error) {
         console.error('Error al crear tabla evaluations:', error);
+        throw error;
+    }
+}
+
+async function createGestureAttemptsTable(pool) {
+    try {
+        const createTableQuery = `
+            CREATE TABLE IF NOT EXISTS gesture_attempts (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                firebase_uid VARCHAR(128) NOT NULL,
+                user_id INT NULL,
+                gesture_id VARCHAR(128) NOT NULL,
+                attempt_id VARCHAR(150) NOT NULL,
+                gesture_name VARCHAR(150) NOT NULL,
+                score DECIMAL(5,2) NOT NULL,
+                timestamp DATETIME NOT NULL,
+                raw_data JSON NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_attempt (firebase_uid, gesture_id, attempt_id),
+                INDEX idx_firebase_uid (firebase_uid),
+                INDEX idx_user_id (user_id),
+                INDEX idx_gesture_id (gesture_id),
+                INDEX idx_timestamp (timestamp),
+                CONSTRAINT fk_attempt_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        `;
+
+        await pool.execute(createTableQuery);
+        console.log('Tabla gesture_attempts creada o verificada exitosamente');
+    } catch (error) {
+        console.error('Error al crear tabla gesture_attempts:', error);
         throw error;
     }
 }

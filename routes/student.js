@@ -1,7 +1,9 @@
 const express = require('express');
 const User = require('../models/User');
 const Evaluation = require('../models/Evaluation');
+const GestureAttempt = require('../models/GestureAttempt');
 const { authenticateToken, requireStudent } = require('../middleware/auth');
+const { syncGestureAttemptsForUser } = require('../services/firebaseAdmin');
 
 const router = express.Router();
 
@@ -14,14 +16,82 @@ const router = express.Router();
 
 // ===== RUTAS DE ESTUDIANTE =====
 
-// Obtener historial de intentos del estudiante
+// Obtener historial de intentos del estudiante desde MySQL
 router.get('/my-attempts', authenticateToken, requireStudent, async (req, res) => {
-    res.json({
-        success: true,
-        data: {
-            attempts: []
+    try {
+        const user = req.userData || await User.findById(req.user.id);
+        
+        // Obtener attempts desde MySQL
+        let attempts = [];
+        
+        if (user.firebase_uid) {
+            // Si tiene firebase_uid, buscar por ese
+            attempts = await GestureAttempt.findByFirebaseUid(user.firebase_uid);
+        } else if (user.id) {
+            // Si no tiene firebase_uid, buscar por user_id
+            attempts = await GestureAttempt.findByUserId(user.id);
         }
-    });
+
+        // Formatear para el frontend
+        const formattedAttempts = attempts.map(attempt => ({
+            id: `${attempt.gesture_id}::${attempt.attempt_id}`,
+            gestureId: attempt.gesture_id,
+            sign: attempt.gesture_name,
+            percentage: attempt.score,
+            score: attempt.score,
+            timestamp: new Date(attempt.timestamp).getTime(),
+            date: attempt.timestamp,
+            raw: attempt.raw_data
+        }));
+
+        res.json({
+            success: true,
+            data: {
+                attempts: formattedAttempts
+            }
+        });
+    } catch (error) {
+        console.error('Error obteniendo attempts:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error al obtener intentos',
+            error: error.message
+        });
+    }
+});
+
+// Sincronizar gesture_attempts desde Firebase a MySQL
+router.post('/sync-attempts', authenticateToken, requireStudent, async (req, res) => {
+    try {
+        const user = req.userData || await User.findById(req.user.id);
+        
+        if (!user.firebase_uid) {
+            return res.status(400).json({
+                success: false,
+                message: 'Usuario no tiene firebase_uid asociado'
+            });
+        }
+
+        // Sincronizar desde Firebase
+        const syncResult = await syncGestureAttemptsForUser(user.firebase_uid);
+
+        res.json({
+            success: true,
+            message: 'Sincronización completada',
+            data: {
+                synced: syncResult.synced.length,
+                errors: syncResult.errors.length,
+                details: syncResult
+            }
+        });
+    } catch (error) {
+        console.error('Error sincronizando attempts:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error al sincronizar intentos',
+            error: error.message
+        });
+    }
 });
 
 // Obtener estadísticas del estudiante
