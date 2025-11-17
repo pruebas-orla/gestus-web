@@ -270,6 +270,21 @@
             appId: "1:190698040565:android:94f15817b3435ea136e9bc"
         };
     </script>
+    <!-- Definir función logout inmediatamente para que esté disponible en onclick -->
+    <script>
+        // Función logout disponible inmediatamente (antes de que se carguen los módulos)
+        function logout() {
+            if (window.studentPanel?.cleanup) {
+                window.studentPanel.cleanup();
+            }
+            localStorage.removeItem('token');
+            localStorage.removeItem('refreshToken');
+            localStorage.removeItem('user');
+            window.location.href = '/home';
+        }
+        // Asegurar que esté disponible globalmente
+        window.logout = logout;
+    </script>
     <!-- Cargar student.js primero para inicializar firebaseDataService -->
     <script type="module" src="/js/student.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
