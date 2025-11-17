@@ -154,8 +154,19 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Servir archivos estáticos
-app.use(express.static(path.join(__dirname, 'public')));
+// Servir archivos estáticos (debe estar antes de las rutas de API)
+// Configurar para servir desde la raíz de public
+app.use(express.static(path.join(__dirname, 'public'), {
+    maxAge: '1d', // Cache por 1 día
+    etag: true,
+    lastModified: true
+}));
+
+// Servir archivos estáticos con rutas explícitas para compatibilidad con Vercel
+app.use('/css', express.static(path.join(__dirname, 'public', 'css')));
+app.use('/js', express.static(path.join(__dirname, 'public', 'js')));
+app.use('/assets', express.static(path.join(__dirname, 'public', 'assets')));
+app.use('/views', express.static(path.join(__dirname, 'public', 'views')));
 
 // Rutas
 app.use('/api/auth', authRoutes);
@@ -254,4 +265,27 @@ async function startServer() {
     }
 }
 
-startServer();
+// Para Vercel: exportar la aplicación Express
+// Para desarrollo local: iniciar el servidor normalmente
+// Vercel establece VERCEL=1 cuando está en su plataforma
+const isVercel = process.env.VERCEL === '1' || process.env.VERCEL_ENV;
+
+if (isVercel) {
+    // En Vercel/serverless, exportamos la app
+    // La inicialización de DB se hará de manera lazy cuando sea necesario
+    module.exports = app;
+    
+    // Intentar inicializar la DB en background (no bloqueante)
+    (async () => {
+        try {
+            await testConnection();
+            await initializeDatabase();
+            console.log('Base de datos inicializada en Vercel');
+        } catch (error) {
+            console.warn('No se pudo inicializar la DB al inicio (esto es normal en serverless):', error.message);
+        }
+    })();
+} else {
+    // En desarrollo local, iniciamos el servidor normalmente
+    startServer();
+}
