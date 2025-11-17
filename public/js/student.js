@@ -210,3 +210,17 @@ window.firebaseDataService = {
   getStudentsByProfessorUid
 };
 
+// Función global para logout
+function logout() {
+  if (window.studentPanel?.cleanup) {
+    window.studentPanel.cleanup();
+  }
+  localStorage.removeItem('token');
+  localStorage.removeItem('refreshToken');
+  localStorage.removeItem('user');
+  window.location.href = '/home';
+}
+
+// Hacer la función logout disponible globalmente
+window.logout = logout;
+
