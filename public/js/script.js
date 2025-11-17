@@ -1,5 +1,6 @@
-// Configuración de la API
-const API_BASE_URL = 'http://localhost:5000/api';
+// Configuración de la API (se carga desde config.js)
+// Si config.js no está cargado, usar fallback
+const API_BASE_URL = window.API_BASE_URL || (window.location.hostname === 'localhost' ? 'http://localhost:5000/api' : '/api');
 
 // Elementos del DOM
 const loginForm = document.getElementById('loginForm');
