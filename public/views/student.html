@@ -7,6 +7,28 @@
     <link rel="stylesheet" href="/css/student.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="icon" href="/assets/gestus.png" type="image/png">
+    <!-- Función logout cargada de forma síncrona en el head -->
+    <script>
+        // Función logout disponible inmediatamente (carga síncrona)
+        (function() {
+            'use strict';
+            function logout() {
+                try {
+                    if (window.studentPanel && typeof window.studentPanel.cleanup === 'function') {
+                        window.studentPanel.cleanup();
+                    }
+                } catch (e) {
+                    console.warn('Error al limpiar studentPanel:', e);
+                }
+                localStorage.removeItem('token');
+                localStorage.removeItem('refreshToken');
+                localStorage.removeItem('user');
+                window.location.href = '/home';
+            }
+            // Hacer disponible globalmente de forma síncrona
+            window.logout = logout;
+        })();
+    </script>
 </head>
 <body>
     <div class="student-container">
@@ -269,21 +291,6 @@
             messagingSenderId: "190698040565",
             appId: "1:190698040565:android:94f15817b3435ea136e9bc"
         };
-    </script>
-    <!-- Definir función logout inmediatamente para que esté disponible en onclick -->
-    <script>
-        // Función logout disponible inmediatamente (antes de que se carguen los módulos)
-        function logout() {
-            if (window.studentPanel?.cleanup) {
-                window.studentPanel.cleanup();
-            }
-            localStorage.removeItem('token');
-            localStorage.removeItem('refreshToken');
-            localStorage.removeItem('user');
-            window.location.href = '/home';
-        }
-        // Asegurar que esté disponible globalmente
-        window.logout = logout;
     </script>
     <!-- Cargar student.js primero para inicializar firebaseDataService -->
     <script type="module" src="/js/student.js"></script>
