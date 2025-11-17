@@ -604,4 +604,34 @@ router.post('/sync-gesture-attempts', authenticateToken, requireAdmin, async (re
     }
 });
 
+// Endpoint de prueba para verificar datos de Firebase (solo admin)
+router.get('/test-firebase-attempts', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        const { getAllGestureAttempts } = require('../services/firebaseAdmin');
+        
+        console.log('[Test] Obteniendo datos de gestureAttempts desde Firebase...');
+        const firebaseData = await getAllGestureAttempts();
+        
+        res.json({
+            success: true,
+            message: 'Datos obtenidos de Firebase',
+            data: {
+                totalUsers: firebaseData.length,
+                users: firebaseData.map(user => ({
+                    firebase_uid: user.firebase_uid,
+                    attemptsCount: user.attempts.length,
+                    sampleAttempt: user.attempts.length > 0 ? user.attempts[0] : null
+                }))
+            }
+        });
+    } catch (error) {
+        console.error('[Test] Error obteniendo datos de Firebase:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error al obtener datos de Firebase',
+            error: error.message
+        });
+    }
+});
+
 module.exports = router;
