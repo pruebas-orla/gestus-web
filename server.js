@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const swaggerUi = require('swagger-ui-express');
 const swaggerJsdoc = require('swagger-jsdoc');
 require('dotenv').config({ path: './config.env' });
@@ -186,12 +187,45 @@ app.use('/js', express.static(path.join(publicPath, 'js'), {
 }));
 app.use('/assets', express.static(path.join(publicPath, 'assets'), {
     maxAge: '7d', // Assets cambian menos frecuentemente
-    etag: true
+    etag: true,
+    setHeaders: (res, path) => {
+        // Asegurar que manifest.json tenga los headers correctos
+        if (path.endsWith('manifest.json')) {
+            res.setHeader('Content-Type', 'application/manifest+json');
+            res.setHeader('Access-Control-Allow-Origin', '*');
+        }
+    }
 }));
 app.use('/views', express.static(path.join(publicPath, 'views'), {
     maxAge: '1d',
     etag: true
 }));
+
+// Ruta explícita para manifest.json (PWA) - debe estar antes de las rutas de API
+app.get('/assets/manifest.json', (req, res) => {
+    const manifestPath = path.join(publicPath, 'assets', 'manifest.json');
+    
+    // Verificar que el archivo existe
+    if (!fs.existsSync(manifestPath)) {
+        console.error('Manifest.json no encontrado en:', manifestPath);
+        return res.status(404).json({ error: 'Manifest not found' });
+    }
+    
+    // Establecer headers apropiados para PWA
+    res.setHeader('Content-Type', 'application/manifest+json');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // 1 día
+    
+    // Enviar el archivo
+    res.sendFile(manifestPath, (err) => {
+        if (err) {
+            console.error('Error al servir manifest.json:', err);
+            if (!res.headersSent) {
+                res.status(500).json({ error: 'Error al cargar manifest' });
+            }
+        }
+    });
+});
 
 // Rutas
 app.use('/api/auth', authRoutes);
