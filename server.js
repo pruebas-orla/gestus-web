@@ -14,6 +14,7 @@ const parentRoutes = require('./routes/parent');
 const rolesRoutes = require('./routes/roles');
 
 const app = express();
+// Cloud Run usa la variable PORT automáticamente, pero mantenemos 5000 como fallback para desarrollo local
 const PORT = process.env.PORT || 5000;
 
 // Configuración de Swagger

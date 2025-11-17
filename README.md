@@ -175,6 +175,83 @@ CREATE TABLE users (
 - `DB_PORT`: Puerto de MySQL (default: 3306)
 
 
+## Docker
+
+### Desarrollo Local con Docker Compose
+
+```bash
+# Construir y levantar los contenedores
+docker-compose up -d
+
+# Ver logs
+docker-compose logs -f
+
+# Detener los contenedores
+docker-compose down
+
+# Reconstruir después de cambios
+docker-compose up -d --build
+```
+
+La aplicación estará disponible en `http://localhost:5000`
+
+### Construir Imagen Docker
+
+```bash
+# Construir la imagen
+docker build -t gestus-app .
+
+# Ejecutar el contenedor
+docker run -p 5000:8080 \
+  -e DB_HOST=mysql \
+  -e DB_USER=gestus \
+  -e DB_PASSWORD=gestuspassword \
+  -e DB_NAME=webprojectdb \
+  gestus-app
+```
+
+## Despliegue en Google Cloud
+
+Este proyecto está configurado para desplegarse en **Google Cloud Run** usando Docker.
+
+### Prerrequisitos
+
+- Cuenta de Google Cloud Platform
+- Google Cloud SDK instalado (`gcloud`)
+- Docker instalado
+
+### Despliegue Rápido
+
+1. **Configura el proyecto de Google Cloud:**
+   ```bash
+   gcloud config set project TU_PROJECT_ID
+   ```
+
+2. **Despliega usando Cloud Build:**
+   ```bash
+   gcloud builds submit --config=cloudbuild.yaml .
+   ```
+
+3. **O usa el script de ayuda:**
+   ```bash
+   chmod +x deploy.sh
+   ./deploy.sh
+   ```
+
+### Documentación Completa
+
+Para instrucciones detalladas sobre cómo configurar Cloud SQL, Secret Manager, y todas las opciones de despliegue, consulta:
+
+📖 **[DEPLOY_GOOGLE_CLOUD.md](./DEPLOY_GOOGLE_CLOUD.md)**
+
+### Archivos de Configuración
+
+- `Dockerfile` - Imagen Docker optimizada para producción
+- `docker-compose.yml` - Configuración para desarrollo local
+- `cloudbuild.yaml` - Configuración de Google Cloud Build
+- `.gcloudignore` - Archivos ignorados en el despliegue
+- `config.env.example` - Plantilla de variables de entorno
+
 ## Solución de Problemas
 
 1. **Error de conexión**: Verifica que el servidor esté corriendo
@@ -182,4 +259,6 @@ CREATE TABLE users (
 3. **Base de datos**: Verifica que MySQL esté corriendo en XAMPP y las credenciales sean correctas
 4. **Error de conexión MySQL**: Verifica que el usuario tenga permisos en la base de datos
 5. **Puerto ocupado**: Cambia el puerto en las variables de entorno si 3306 está ocupado
+6. **Error en Docker**: Verifica que Docker esté corriendo y que los puertos no estén ocupados
+7. **Error en Cloud Run**: Revisa los logs con `gcloud run services logs read gestus-app --region us-central1`
 

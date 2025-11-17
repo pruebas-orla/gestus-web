@@ -1,10 +1,17 @@
-# Este archivo especifica archivos que se ignoran al construir la imagen Docker
+# Este archivo especifica archivos que se ignoran al subir a Google Cloud
+# Similar a .gitignore pero para gcloud
 
-# Dependencias (se instalarán en el contenedor)
+# Dependencias
 node_modules/
 npm-debug.log
+package-lock.json
 
-# Docker files
+# Archivos de entorno local
+.env
+config.env
+*.local
+
+# Docker
 Dockerfile*
 docker-compose*
 .dockerignore
@@ -13,11 +20,6 @@ docker-compose*
 .git/
 .gitignore
 .gitattributes
-
-# Archivos de entorno local (se usarán variables de entorno en producción)
-.env
-config.env
-*.local
 
 # IDEs
 .vscode/
@@ -43,7 +45,7 @@ start_server.bat
 *.bat
 *.sh
 
-# Firebase (se configurará como secreto en Cloud Run)
+# Firebase (se configurará como secreto)
 google-services.json
 **/serviceAccountKey.json
 
@@ -54,5 +56,3 @@ __tests__/
 *.test.js
 *.spec.js
 
-# Archivos de Docker
-docker/

@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # Servicio de MySQL
+  mysql:
+    image: mysql:8.0
+    container_name: gestus-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: webprojectdb
+      MYSQL_USER: gestus
+      MYSQL_PASSWORD: gestuspassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d
+    networks:
+      - gestus-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Servicio de la aplicación
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gestus-app
+    restart: unless-stopped
+    ports:
+      - "5000:8080"
+    environment:
+      PORT: 8080
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: webprojectdb
+      DB_USER: gestus
+      DB_PASSWORD: gestuspassword
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      JWT_EXPIRES_IN: 24h
+      JWT_REFRESH_EXPIRES_IN: 7d
+      JWT_ALGORITHM: HS256
+      FIREBASE_DATABASE_URL: ${FIREBASE_DATABASE_URL}
+      FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - gestus-network
+    volumes:
+      # Montar el código para desarrollo (opcional, comentar en producción)
+      - ./:/app
+      - /app/node_modules
+
+networks:
+  gestus-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local
+
