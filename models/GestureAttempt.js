@@ -46,6 +46,12 @@ class GestureAttempt {
         const pool = await getConnection();
         
         try {
+            // Asegurar que timestamp sea un objeto Date válido
+            const timestampDate = timestamp instanceof Date ? timestamp : new Date(timestamp);
+            
+            // Formatear timestamp para MySQL (YYYY-MM-DD HH:mm:ss)
+            const timestampStr = timestampDate.toISOString().slice(0, 19).replace('T', ' ');
+            
             const [result] = await pool.execute(
                 `INSERT INTO gesture_attempts 
                     (firebase_uid, user_id, gesture_id, attempt_id, gesture_name, score, timestamp, raw_data)
@@ -62,7 +68,7 @@ class GestureAttempt {
                     attempt_id,
                     gesture_name,
                     score,
-                    timestamp,
+                    timestampStr,
                     raw_data ? JSON.stringify(raw_data) : null
                 ]
             );
@@ -70,7 +76,7 @@ class GestureAttempt {
             // Obtener el registro insertado o actualizado
             let id = result.insertId;
             if (!id || id === 0) {
-                // Si fue un UPDATE, obtener el ID del registro existente
+                // Si fue un UPDATE (insertId es 0), obtener el ID del registro existente
                 const [idRows] = await pool.execute(
                     `SELECT id FROM gesture_attempts 
                      WHERE firebase_uid = ? AND gesture_id = ? AND attempt_id = ?`,
@@ -78,14 +84,38 @@ class GestureAttempt {
                 );
                 if (idRows.length > 0) {
                     id = idRows[0].id;
+                } else {
+                    // Si no se encontró, intentar obtener el último insertado para este usuario
+                    const [lastRows] = await pool.execute(
+                        `SELECT id FROM gesture_attempts 
+                         WHERE firebase_uid = ? 
+                         ORDER BY id DESC LIMIT 1`,
+                        [firebase_uid]
+                    );
+                    if (lastRows.length > 0) {
+                        id = lastRows[0].id;
+                    }
                 }
             }
 
-            const [rows] = await pool.execute(
-                `SELECT * FROM gesture_attempts WHERE id = ?`,
-                [id]
-            );
+            if (id && id > 0) {
+                const [rows] = await pool.execute(
+                    `SELECT * FROM gesture_attempts WHERE id = ?`,
+                    [id]
+                );
 
+                if (rows.length > 0) {
+                    return new GestureAttempt(rows[0]);
+                }
+            }
+            
+            // Si no se pudo obtener por ID, intentar obtener por los campos únicos
+            const [rows] = await pool.execute(
+                `SELECT * FROM gesture_attempts 
+                 WHERE firebase_uid = ? AND gesture_id = ? AND attempt_id = ?`,
+                [firebase_uid, gesture_id, attempt_id]
+            );
+            
             if (rows.length > 0) {
                 return new GestureAttempt(rows[0]);
             }
@@ -103,6 +133,8 @@ class GestureAttempt {
                     return new GestureAttempt(rows[0]);
                 }
             }
+            console.error(`[Sync] Error en GestureAttempt.create:`, error);
+            console.error(`[Sync] Datos:`, { firebase_uid, gesture_id, attempt_id, score, timestamp });
             throw error;
         }
     }
@@ -154,25 +186,69 @@ class GestureAttempt {
         const synced = [];
         const errors = [];
 
+        console.log(`[Sync] Sincronizando ${attempts.length} attempts para firebase_uid: ${firebaseUid}`);
+
         for (const attempt of attempts) {
             try {
+                // Extraer gesture_id y attempt_id del id si viene en formato "gestureId::attemptId"
+                let gesture_id = 'unknown';
+                let attempt_id = 'default';
+                
+                if (attempt.id && typeof attempt.id === 'string' && attempt.id.includes('::')) {
+                    const parts = attempt.id.split('::');
+                    gesture_id = parts[0] || 'unknown';
+                    attempt_id = parts[1] || 'default';
+                } else {
+                    gesture_id = attempt.gestureId || attempt.gesture_id || 'unknown';
+                    attempt_id = attempt.attemptId || attempt.attempt_id || String(Date.now());
+                }
+
+                // Normalizar timestamp
+                let timestamp = new Date();
+                if (attempt.timestamp) {
+                    if (typeof attempt.timestamp === 'number') {
+                        timestamp = new Date(attempt.timestamp);
+                    } else if (typeof attempt.timestamp === 'string') {
+                        timestamp = new Date(attempt.timestamp);
+                    }
+                }
+
+                // Normalizar score
+                let score = 0;
+                if (attempt.percentage !== undefined) {
+                    score = Number(attempt.percentage);
+                } else if (attempt.score !== undefined) {
+                    score = Number(attempt.score);
+                }
+                score = Math.max(0, Math.min(100, Math.round(score)));
+
                 const attemptData = {
                     firebase_uid: firebaseUid,
                     user_id: user_id,
-                    gesture_id: attempt.gestureId || attempt.id?.split('::')[0] || 'unknown',
-                    attempt_id: attempt.id?.split('::')[1] || attempt.attemptId || 'default',
-                    gesture_name: attempt.sign || attempt.gestureName || attempt.gesture_id || 'Gesto',
-                    score: attempt.percentage || attempt.score || 0,
-                    timestamp: attempt.timestamp ? new Date(attempt.timestamp) : new Date(),
+                    gesture_id: gesture_id,
+                    attempt_id: attempt_id,
+                    gesture_name: attempt.sign || attempt.gestureName || attempt.gesture_name || gesture_id || 'Gesto',
+                    score: score,
+                    timestamp: timestamp,
                     raw_data: attempt.raw || attempt
                 };
 
                 const saved = await GestureAttempt.create(attemptData);
                 synced.push(saved);
             } catch (error) {
-                console.error(`Error sincronizando attempt ${attempt.id}:`, error.message);
-                errors.push({ attempt: attempt.id, error: error.message });
+                console.error(`[Sync] Error sincronizando attempt:`, error);
+                console.error(`[Sync] Attempt data:`, JSON.stringify(attempt, null, 2));
+                errors.push({ 
+                    attempt: attempt.id || 'unknown', 
+                    error: error.message,
+                    stack: error.stack 
+                });
             }
+        }
+
+        console.log(`[Sync] ✓ Sincronizados ${synced.length}/${attempts.length} attempts para ${firebaseUid}`);
+        if (errors.length > 0) {
+            console.warn(`[Sync] ⚠️ ${errors.length} errores al sincronizar`);
         }
 
         return { synced, errors };

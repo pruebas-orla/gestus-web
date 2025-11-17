@@ -566,11 +566,21 @@ router.get('/stats', authenticateToken, requireAdmin, async (req, res) => {
  */
 router.post('/sync-gesture-attempts', authenticateToken, requireAdmin, async (req, res) => {
     try {
+        console.log('[Sync] ========================================');
         console.log('[Sync] Iniciando sincronización de todos los gesture_attempts desde Firebase...');
+        console.log('[Sync] ========================================');
         
         const syncResult = await syncAllGestureAttemptsFromFirebase();
         
-        console.log(`[Sync] ✓ Sincronización completada: ${syncResult.synced} intentos sincronizados de ${syncResult.totalUsers} usuarios`);
+        console.log('[Sync] ========================================');
+        console.log(`[Sync] ✓ Sincronización completada:`);
+        console.log(`[Sync]   - Usuarios procesados: ${syncResult.totalUsers}`);
+        console.log(`[Sync]   - Intentos sincronizados: ${syncResult.synced}`);
+        console.log(`[Sync]   - Errores: ${syncResult.errors.length}`);
+        if (syncResult.errors.length > 0) {
+            console.log('[Sync] Detalles de errores:', JSON.stringify(syncResult.errors, null, 2));
+        }
+        console.log('[Sync] ========================================');
         
         res.json({
             success: true,
@@ -583,11 +593,13 @@ router.post('/sync-gesture-attempts', authenticateToken, requireAdmin, async (re
             }
         });
     } catch (error) {
-        console.error('Error sincronizando gesture_attempts:', error);
+        console.error('[Sync] ❌ Error sincronizando gesture_attempts:', error);
+        console.error('[Sync] Stack:', error.stack);
         res.status(500).json({
             success: false,
             message: 'Error al sincronizar gesture_attempts desde Firebase',
-            error: error.message
+            error: error.message,
+            stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined
         });
     }
 });

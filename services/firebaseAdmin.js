@@ -237,8 +237,20 @@ async function syncAllGestureAttemptsFromFirebase() {
     const GestureAttempt = require('../models/GestureAttempt');
 
     try {
+        console.log('[Sync] Obteniendo datos de gestureAttempts desde Firebase...');
         const snapshot = await admin.database().ref('gestureAttempts').once('value');
         const data = snapshot.val() || {};
+
+        console.log(`[Sync] Encontrados ${Object.keys(data).length} usuarios con gesture_attempts en Firebase`);
+
+        if (Object.keys(data).length === 0) {
+            console.warn('[Sync] ⚠️ No hay datos de gestureAttempts en Firebase');
+            return {
+                totalUsers: 0,
+                synced: 0,
+                errors: []
+            };
+        }
 
         const results = {
             totalUsers: Object.keys(data).length,
@@ -248,15 +260,27 @@ async function syncAllGestureAttemptsFromFirebase() {
 
         for (const [firebaseUid, rawAttempts] of Object.entries(data)) {
             try {
+                console.log(`[Sync] Procesando usuario ${firebaseUid}...`);
+                console.log(`[Sync] Datos raw:`, JSON.stringify(rawAttempts, null, 2).substring(0, 500));
+                
                 const attempts = normalizeGestureAttempts(rawAttempts);
+                console.log(`[Sync] Attempts normalizados: ${attempts.length}`);
+                
+                if (attempts.length === 0) {
+                    console.log(`[Sync] ⚠️ No se encontraron attempts normalizados para ${firebaseUid}`);
+                    continue;
+                }
+                
                 const syncResult = await GestureAttempt.syncFromFirebase(firebaseUid, attempts);
                 results.synced += syncResult.synced.length;
                 if (syncResult.errors.length > 0) {
                     results.errors.push(...syncResult.errors);
                 }
+                console.log(`[Sync] ✓ Usuario ${firebaseUid}: ${syncResult.synced.length} attempts sincronizados`);
             } catch (error) {
-                console.error(`Error sincronizando attempts para ${firebaseUid}:`, error.message);
-                results.errors.push({ firebaseUid, error: error.message });
+                console.error(`[Sync] ❌ Error sincronizando attempts para ${firebaseUid}:`, error);
+                console.error(`[Sync] Stack:`, error.stack);
+                results.errors.push({ firebaseUid, error: error.message, stack: error.stack });
             }
         }
 
