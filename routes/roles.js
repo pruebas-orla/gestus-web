@@ -2,7 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
-const { getFirebaseUsers } = require('../services/firebaseAdmin');
+const { getFirebaseUsers, syncAllGestureAttemptsFromFirebase } = require('../services/firebaseAdmin');
 
 const router = express.Router();
 
@@ -222,10 +222,21 @@ router.get('/all', authenticateToken, requireAdmin, async (req, res) => {
             console.warn('No fue posible obtener usuarios desde Firebase:', error.message);
         }
 
+        // Sincronizar gesture_attempts después de sincronizar usuarios
+        let gestureSyncResult = null;
+        try {
+            console.log('[Sync] Sincronizando gesture_attempts después de sincronizar usuarios...');
+            gestureSyncResult = await syncAllGestureAttemptsFromFirebase();
+            console.log(`[Sync] ✓ Sincronizados ${gestureSyncResult.synced} gesture_attempts de ${gestureSyncResult.totalUsers} usuarios`);
+        } catch (error) {
+            console.warn('[Sync] ⚠️ No se pudo sincronizar gesture_attempts:', error.message);
+        }
+
         const combinedUsers = normalizedMysqlUsers;
 
         res.json({
             success: true,
+            message: 'Usuarios obtenidos exitosamente',
             data: {
                 users: combinedUsers,
                 total: combinedUsers.length,
@@ -234,7 +245,12 @@ router.get('/all', authenticateToken, requireAdmin, async (req, res) => {
                     profesor: combinedUsers.filter(u => u.role === 'profesor').length,
                     estudiante: combinedUsers.filter(u => u.role === 'estudiante').length,
                     padre: combinedUsers.filter(u => u.role === 'padre').length
-                }
+                },
+                gestureSync: gestureSyncResult ? {
+                    synced: gestureSyncResult.synced,
+                    totalUsers: gestureSyncResult.totalUsers,
+                    errors: gestureSyncResult.errors.length
+                } : null
             }
         });
     } catch (error) {
@@ -527,6 +543,51 @@ router.get('/stats', authenticateToken, requireAdmin, async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error interno del servidor'
+        });
+    }
+});
+
+// Sincronizar todos los gesture_attempts desde Firebase a MySQL
+/**
+ * @swagger
+ * /api/roles/sync-gesture-attempts:
+ *   post:
+ *     summary: Sincronizar todos los gesture_attempts desde Firebase a MySQL
+ *     tags: [Roles]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Sincronización completada exitosamente
+ *       401:
+ *         description: Token de acceso requerido
+ *       403:
+ *         description: No tienes permisos de administrador
+ */
+router.post('/sync-gesture-attempts', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+        console.log('[Sync] Iniciando sincronización de todos los gesture_attempts desde Firebase...');
+        
+        const syncResult = await syncAllGestureAttemptsFromFirebase();
+        
+        console.log(`[Sync] ✓ Sincronización completada: ${syncResult.synced} intentos sincronizados de ${syncResult.totalUsers} usuarios`);
+        
+        res.json({
+            success: true,
+            message: 'Sincronización de gesture_attempts completada',
+            data: {
+                totalUsers: syncResult.totalUsers,
+                synced: syncResult.synced,
+                errors: syncResult.errors.length,
+                errorDetails: syncResult.errors.length > 0 ? syncResult.errors : null
+            }
+        });
+    } catch (error) {
+        console.error('Error sincronizando gesture_attempts:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error al sincronizar gesture_attempts desde Firebase',
+            error: error.message
         });
     }
 });

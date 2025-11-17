@@ -292,6 +292,26 @@ app.use('*', (req, res) => {
     });
 });
 
+// Función para sincronizar gesture_attempts desde Firebase (en background)
+async function syncGestureAttemptsOnStartup() {
+    try {
+        const { syncAllGestureAttemptsFromFirebase } = require('./services/firebaseAdmin');
+        console.log('[Sync] Iniciando sincronización automática de gesture_attempts desde Firebase...');
+        
+        const syncResult = await syncAllGestureAttemptsFromFirebase();
+        
+        console.log(`[Sync] ✓ Sincronización automática completada:`);
+        console.log(`[Sync]   - Usuarios procesados: ${syncResult.totalUsers}`);
+        console.log(`[Sync]   - Intentos sincronizados: ${syncResult.synced}`);
+        if (syncResult.errors.length > 0) {
+            console.warn(`[Sync]   - Errores: ${syncResult.errors.length}`);
+        }
+    } catch (error) {
+        console.warn('[Sync] ⚠️ No se pudo sincronizar gesture_attempts al inicio:', error.message);
+        console.warn('[Sync]   Esto es normal si Firebase no está configurado o no hay datos');
+    }
+}
+
 // Inicializar base de datos y iniciar servidor
 async function startServer() {
     try {
@@ -305,6 +325,11 @@ async function startServer() {
         
         // Inicializar la base de datos
         await initializeDatabase();
+        
+        // Sincronizar gesture_attempts desde Firebase en background (no bloquea el inicio)
+        syncGestureAttemptsOnStartup().catch(err => {
+            console.warn('[Sync] Error en sincronización automática:', err.message);
+        });
         
         // Iniciar el servidor
         app.listen(PORT, () => {
