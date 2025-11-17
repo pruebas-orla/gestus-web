@@ -733,8 +733,13 @@ function logout() {
         window.parentPanel.cleanup();
     }
     localStorage.removeItem('token');
-    window.location.href = '/login';
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
+    window.location.href = '/home';
 }
+
+// Hacer la función logout disponible globalmente
+window.logout = logout;
 
 // Cerrar modal al hacer clic fuera de él
 document.addEventListener('click', (e) => {
