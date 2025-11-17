@@ -154,19 +154,44 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Servir archivos estáticos (debe estar antes de las rutas de API)
-// Configurar para servir desde la raíz de public
-app.use(express.static(path.join(__dirname, 'public'), {
+// Servir archivos estáticos (debe estar ANTES de las rutas de API)
+// Usar process.cwd() para obtener la raíz del proyecto (funciona en Vercel y local)
+// __dirname puede variar dependiendo de desde dónde se carga el módulo
+const projectRoot = process.cwd();
+const publicPath = path.join(projectRoot, 'public');
+
+// Log para debugging (solo en desarrollo)
+if (process.env.NODE_ENV !== 'production' || process.env.VERCEL === '1') {
+    console.log('Public path:', publicPath);
+    console.log('__dirname:', __dirname);
+    console.log('process.cwd():', projectRoot);
+}
+
+// Servir archivos estáticos desde la raíz de public
+app.use(express.static(publicPath, {
     maxAge: '1d', // Cache por 1 día
     etag: true,
-    lastModified: true
+    lastModified: true,
+    index: false // No servir index.html automáticamente
 }));
 
-// Servir archivos estáticos con rutas explícitas para compatibilidad con Vercel
-app.use('/css', express.static(path.join(__dirname, 'public', 'css')));
-app.use('/js', express.static(path.join(__dirname, 'public', 'js')));
-app.use('/assets', express.static(path.join(__dirname, 'public', 'assets')));
-app.use('/views', express.static(path.join(__dirname, 'public', 'views')));
+// Servir archivos estáticos con rutas explícitas para máxima compatibilidad
+app.use('/css', express.static(path.join(publicPath, 'css'), {
+    maxAge: '1d',
+    etag: true
+}));
+app.use('/js', express.static(path.join(publicPath, 'js'), {
+    maxAge: '1d',
+    etag: true
+}));
+app.use('/assets', express.static(path.join(publicPath, 'assets'), {
+    maxAge: '7d', // Assets cambian menos frecuentemente
+    etag: true
+}));
+app.use('/views', express.static(path.join(publicPath, 'views'), {
+    maxAge: '1d',
+    etag: true
+}));
 
 // Rutas
 app.use('/api/auth', authRoutes);
@@ -179,41 +204,41 @@ app.use('/api/roles', rolesRoutes);
 // Documentación Swagger
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-// Rutas para páginas HTML
+// Rutas para páginas HTML (usar publicPath para compatibilidad con Vercel)
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'views', 'index.html'));
+    res.sendFile(path.join(publicPath, 'views', 'index.html'));
 });
 
 app.get('/home', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'views', 'home.html'));
+    res.sendFile(path.join(publicPath, 'views', 'home.html'));
 });
 
 app.get('/login', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'views', 'login.html'));
+    res.sendFile(path.join(publicPath, 'views', 'login.html'));
 });
 
 app.get('/dashboard', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'views', 'dashboard.html'));
+    res.sendFile(path.join(publicPath, 'views', 'dashboard.html'));
 });
 
 app.get('/app-shell', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'views', 'app-shell.html'));
+    res.sendFile(path.join(publicPath, 'views', 'app-shell.html'));
 });
 
 app.get('/admin', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'views', 'admin.html'));
+    res.sendFile(path.join(publicPath, 'views', 'admin.html'));
 });
 
 app.get('/professor', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'views', 'professor.html'));
+    res.sendFile(path.join(publicPath, 'views', 'professor.html'));
 });
 
 app.get('/student', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'views', 'student.html'));
+    res.sendFile(path.join(publicPath, 'views', 'student.html'));
 });
 
 app.get('/parent', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'views', 'parent.html'));
+    res.sendFile(path.join(publicPath, 'views', 'parent.html'));
 });
 
 // Manejo de errores
